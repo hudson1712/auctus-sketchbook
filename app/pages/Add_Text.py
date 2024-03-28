@@ -76,7 +76,7 @@ def main():
     #################################-- INITIALISE APP --#################################
     st.set_page_config(layout="wide")
     # Load fonts from local directory
-    fonts_dir = 'fonts'
+    fonts_dir = 'app/fonts'
     fonts = [f for f in os.listdir(fonts_dir) if f.endswith('.ttf') or f.endswith('.otf')]
 
     logo = True
