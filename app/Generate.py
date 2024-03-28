@@ -11,6 +11,33 @@ import boto3
 from botocore.client import Config
 from dataplane import s3_upload
 
+def handle_openai_error(error):
+    if error.__class__.__name__ == "APIConnectionError":
+        message = "Issue connecting to OpenAI. Check your network settings, proxy configuration, SSL certificates, or firewall rules."
+    elif error.__class__.__name__ == "APITimeoutError":
+        message = "Request timed out. Retry your request after a brief wait."
+    elif error.__class__.__name__ == "AuthenticationError":
+        message = "API key or token was invalid, expired, or revoked. Contact sam.hudson@auctusdigital.co.uk or james.lilley@auctusdigital.co.uk for help."
+    elif error.__class__.__name__ == "BadRequestError":
+        message = "Your request was malformed or missing some required parameters, such as a token or an input. The error message should advise you on the specific error made. Check the documentation for the specific API method you are calling and make sure you are sending valid and complete parameters. You may also need to check the encoding, format, or size of your request data."
+    elif error.__class__.__name__ == "ConflictError":
+        message = "The resource was updated by another request. Try to update the resource again and ensure no other requests are trying to update it."
+    elif error.__class__.__name__ == "InternalServerError":
+        message = "Issue on OpenAI server side. Retry your request after a brief wait."
+    elif error.__class__.__name__ == "NotFoundError":
+        message = "Requested resource does not exist. Ensure you are the correct resource identifier."
+    elif error.__class__.__name__ == "PermissionDeniedError":
+        message = "You don't have access to the requested resource. Ensure you are using the correct API key, organization ID, and resource ID."
+    elif error.__class__.__name__ == "RateLimitError":
+        message = "You have hit your assigned rate limit. Pace your requests. Track usage at https://platform.openai.com/usage."
+    elif error.__class__.__name__ == "UnprocessableEntityError":
+        message = "Unable to process the request despite the format being correct. Please try the request again."
+    else:
+        message = "An unknown error occurred."
+
+    print(message)
+    st.error(message)  # Display the error in Streamlit
+
 @st.cache_data
 def calc_costs(model, number, shape):
     if model == "dall-e-2":
@@ -71,7 +98,8 @@ def refine_prompt(_client, prompt):
         return response.choices[0].message.content
     except Exception as e:
         print("Failed to refine prompt: " + e)
-        st.write("Failed to refine prompt with error (contact sam.hudson@auctusdigital.co.uk): " + e)
+        st.write("Failed to refine prompt with error (contact sam.hudson@auctusdigital.co.uk): " + e)        
+        handle_openai_error(e)
         return prompt
 
 #@st.cache_data
@@ -79,7 +107,6 @@ def generate_images_from_prompt(_client, prompt, number=1, model="dall-e-2", sha
     image_urls = []
     if model == "dall-e-3":
         shape = "1024x1024"
-        #number = 1
     for n in range(number):
         try:
             response = _client.images.generate(
@@ -96,6 +123,7 @@ def generate_images_from_prompt(_client, prompt, number=1, model="dall-e-2", sha
                 st.write("Failed upload image to Cloudflare, please download the image manually")
 
         except Exception as e:
+            handle_openai_error(e)
             print("Failed to generate image")
             print(e)
             st.write("Failed to refine prompt with error (contact sam.hudson@auctusdigital.co.uk): " + e)
@@ -122,7 +150,8 @@ def generate_variations(_client, _image=None, number=1, model="dall-e-2", shape=
                 print("Failed to upload image to Cloudflare")
                 st.write("Failed upload image to Cloudflare, please download the image manually")
 
-    except openai.OpenAIError as e:
+    except Exception as e:
+        handle_openai_error(e)
         print("Failed to generate variations")
         print(e)
         st.write("Failed to refine prompt with error (contact sam.hudson@auctusdigital.co.uk): " + e)
