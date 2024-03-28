@@ -2,12 +2,14 @@ import requests
 from PIL import Image
 import streamlit as st
 from fire_state import create_store, form_update, get_state, set_state, get_store, set_store
-import json
 from io import BytesIO
 import datetime as dt
 import numpy as np
 import openai
 from openai import OpenAI
+import boto3
+from botocore.client import Config
+from dataplane import s3_upload
 
 @st.cache_data
 def calc_costs(model, number, shape):
@@ -20,6 +22,40 @@ def calc_costs(model, number, shape):
             return number * 0.02
     elif model == "dall-e-3":
         return number * 0.04
+
+def get_byte_array_from_url(url):
+    response = requests.get(url)
+    img = Image.open(BytesIO(response.content))
+    img = img.convert("RGB")
+    image_bytes = BytesIO()
+    img.save(image_bytes, format="PNG")
+    image_bytes = image_bytes.getvalue()
+    return image_bytes
+
+def upload_image_to_cloudflare(image_bytes_array):
+
+    filepath = dt.datetime.now().strftime("%Y/%m/%d/") + str(np.random.randint(10000, 99999))
+
+    # Connect to S3 client
+    S3Connect = boto3.client(
+        's3',
+        endpoint_url=st.secrets['CLOUDFLARE_CONNECTION_URL'],
+        aws_access_key_id=st.secrets['CLOUDFLARE_API_KEY'],
+        aws_secret_access_key=st.secrets['CLOUDFLARE_API_SECRET'],
+        config=Config(signature_version='s3v4'),
+    )
+    try:
+        # Upload the file
+        response = s3_upload(Bucket=st.secrets['CLOUDFLARE_BUCKET'], 
+            S3Client=S3Connect,
+            TargetFilePath=f"generated_images/{filepath}.png",
+            UploadObject=image_bytes_array,
+            UploadMethod=""
+        )
+        return response
+    except FileNotFoundError:
+        print("The file was not found")
+        return None
 
 #@st.cache_data
 def refine_prompt(_client, prompt):
@@ -53,6 +89,12 @@ def generate_images_from_prompt(_client, prompt, number=1, model="dall-e-2", sha
                 size=shape
             )
             image_urls.append(response.data[0].url)
+            try:
+                upload_image_to_cloudflare(get_byte_array_from_url(response.data[0].url))
+            except:
+                print("Failed to upload image to Cloudflare")
+                st.write("Failed upload image to Cloudflare, please download the image manually")
+
         except Exception as e:
             print("Failed to generate image")
             print(e)
@@ -74,6 +116,12 @@ def generate_variations(_client, _image=None, number=1, model="dall-e-2", shape=
         )
         for image in response.data:
             image_urls.append(image.url)
+            try:
+                upload_image_to_cloudflare(get_byte_array_from_url(image.url))
+            except:
+                print("Failed to upload image to Cloudflare")
+                st.write("Failed upload image to Cloudflare, please download the image manually")
+
     except openai.OpenAIError as e:
         print("Failed to generate variations")
         print(e)
@@ -95,7 +143,6 @@ def display_images(image_urls):
         col = image_cols[column_i % 6]
         col.image(image, use_column_width=True)
 
-        #timestamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S") + '-'+str(np.random.randint(1000, 9999)) 
         name = image_url[-10:]
         buf = BytesIO()
         image.save(buf, format="PNG")
@@ -187,7 +234,6 @@ def streamlit_app():
         #If the user uploads an image, allow them to generate variations on the image
         uploaded_image = sc1.file_uploader("Upload an image as a starting point", type=["png", "jpg", "jpeg"])
         
-        
         if uploaded_image is not None:
             image = Image.open(uploaded_image)
             with BytesIO() as buffer:
@@ -213,8 +259,6 @@ def streamlit_app():
         if st.session_state.get("generate_variations") is True:
             st.session_state["generated_image_urls"].extend(generate_variations(client, number=number_of_variations, _image=byte_array, shape=image_var_size))
             st.session_state["generate_variations"] = False
-
-    #st.write("Generated image urls:{}".format(st.session_state["generated_image_urls"]))
 
     #Display the images if generated
     if st.session_state.get("generated_image_urls") is not None:

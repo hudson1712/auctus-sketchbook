@@ -4,7 +4,34 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 import os
-import textwrap
+import boto3
+from botocore.client import Config
+from dataplane import s3_upload
+
+def upload_image_to_cloudflare(image_bytes_array):
+
+    filepath = dt.datetime.now().strftime("%Y/%m/%d/") + str(np.random.randint(10000, 99999))
+
+    # Connect to S3 client
+    S3Connect = boto3.client(
+        's3',
+        endpoint_url=st.secrets['CLOUDFLARE_CONNECTION_URL'],
+        aws_access_key_id=st.secrets['CLOUDFLARE_API_KEY'],
+        aws_secret_access_key=st.secrets['CLOUDFLARE_API_SECRET'],
+        config=Config(signature_version='s3v4'),
+    )
+    try:
+        # Upload the file
+        response = s3_upload(Bucket=st.secrets['CLOUDFLARE_BUCKET'], 
+            S3Client=S3Connect,
+            TargetFilePath=f"generated_images/{filepath}.png",
+            UploadObject=image_bytes_array,
+            UploadMethod=""
+        )
+        return response
+    except FileNotFoundError:
+        print("The file was not found")
+        return None
 
 def wrap_text(text, max_width, _font):
     # Split the text into lines based on the maximum width
@@ -131,7 +158,7 @@ def main():
         #Display the edited image on the right of the screen
         with col2:
             col2.image(editable_image, use_column_width=True)
-
+            
             # Save and download functionality
             buf = BytesIO()
             editable_image.save(buf, format="PNG")
@@ -143,6 +170,10 @@ def main():
                 file_name="image-{}.png".format(timestamp),
                 mime="image/png"
             )
+
+            if col2.button("Save Image to cloudflare"):
+                print(upload_image_to_cloudflare(byte_im))
+                st.write("Image saved to cloudflare")
 
 if __name__ == '__main__':
     main()
