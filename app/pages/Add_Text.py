@@ -54,8 +54,8 @@ def wrap_text(text, max_width, _font):
 def draw_text_with_outline(_draw, position, text, _font, text_color, outline_color, outline_width):
     # Draw outline by offsetting the text position in all directions
     x, y = position
-    for dx in range(-outline_width, outline_width+1):
-        for dy in range(-outline_width, outline_width+1):
+    for dx in range(-outline_width, outline_width+1, 2):
+        for dy in range(-outline_width, outline_width+1, 2):
             if dx == 0 and dy == 0:
                 continue  # Skip the offset for the main text
             _draw.text((x + dx, y + dy), text, font=_font, fill=outline_color)
@@ -102,6 +102,10 @@ def add_gradient(image, gradient_type, gradient_offset=0):
 def main():
     #################################-- INITIALISE APP --#################################
     st.set_page_config(layout="wide")
+
+    if st.session_state['authorised'] == False:
+        return
+
     # Load fonts from local directory
     fonts_dir = 'app/fonts'
     fonts = [f for f in os.listdir(fonts_dir) if f.endswith('.ttf') or f.endswith('.otf')]
