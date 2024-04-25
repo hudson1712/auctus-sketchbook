@@ -105,8 +105,6 @@ def refine_prompt(_client, prompt):
 #@st.cache_data
 def generate_images_from_prompt(_client, prompt, number=1, model="dall-e-2", shape="256x256"):
     image_urls = []
-    if model == "dall-e-3":
-        shape = "1024x1024"
     for n in range(number):
         try:
             response = _client.images.generate(
@@ -224,7 +222,7 @@ def streamlit_app():
         s1, s2, s3 = st.columns(3)
         number_of_images = s1.number_input("Number of images to generate", min_value=1, max_value=10, value=1)
         model_to_use = s2.selectbox("Select generation model", ["dall-e-2", "dall-e-3"], index=1)
-        image_size = s3.selectbox("Image size", ["256x256", "512x512", "1024x1024"], index=2)
+        image_size = s3.selectbox("Image size", ["256x256", "512x512", "1024x1024", "1792x1024", "1024x1792"], index=3)
         est_cost = calc_costs(model_to_use, number_of_images, image_size)
 
         #Take the initial prompt from the user for generating an image
